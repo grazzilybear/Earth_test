@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>星際教室：日夜光影修正版</title>
+    <style>
+        /* --- 基礎設定 (維持穩定版配置) --- */
+        body {
+            margin: 0; padding: 20px; background-color: #222; color: white;
+            font-family: sans-serif; text-align: center;
+        }
+        #ui-container {
+            background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px;
+            margin: 0 auto 20px auto; max-width: 700px;
+        }
+        .btn-group { margin-bottom: 10px; }
+        button {
+            padding: 8px 12px; font-size: 14px; margin: 2px; cursor: pointer;
+            background-color: #4CAF50; color: white; border: none; border-radius: 4px;
+        }
+        button.active { background-color: #FF9800; }
+        #info-box {
+            background: rgba(0,0,0,0.5); padding: 10px; border: 1px solid #4CAF50; line-height: 1.4;
+        }
+        .speed-control-area {
+             margin-top: 15px; display: flex; justify-content: center; align-items: center;
+        }
+
+        /* --- 宇宙舞台 --- */
+        #stage {
+            position: relative; width: 600px; height: 600px;
+            border: 4px solid #FFD700; border-radius: 50%;
+            margin: 0 auto; background-color: #000022; overflow: hidden;
+        }
+        #sun {
+            position: absolute; top: 50%; left: 50%; width: 80px; height: 80px; margin: -40px 0 0 -40px;
+            background: radial-gradient(circle, #fffde7 20%, #FFD700 70%, #ff8c00 100%);
+            border-radius: 50%; box-shadow: 0 0 50px #FFD700; z-index: 5;
+        }
+        .season-tag {
+            position: absolute; color: white; font-size: 14px; z-index: 20; pointer-events: none;
+        }
+        #tag-summer { top: 50%; left: 10px; transform: translateY(-50%); }
+        #tag-winter { top: 50%; right: 10px; transform: translateY(-50%); text-align: right;}
+        #tag-spring { bottom: 10px; left: 50%; transform: translateX(-50%); }
+        #tag-fall { top: 10px; left: 50%; transform: translateX(-50%); }
+
+
+        /* --- 動畫元件 --- */
+        /* 公轉軌道 (順時針旋轉) */
+        #orbit-container {
+            position: absolute; top: 50%; left: 50%; width: 440px; height: 440px; margin: -220px 0 0 -220px;
+            animation: spin 365s linear infinite; animation-play-state: paused; z-index: 10;
+        }
+        /* 地球位置容器 (逆時針旋轉，用於穩定地軸) */
+        #earth-pos {
+            position: absolute; top: 50%; right: -30px; width: 60px; height: 60px; margin-top: -30px;
+            animation: spin-reverse 365s linear infinite; animation-play-state: paused;
+        }
+        
+        /* 地球本體與地軸 */
+        #earth-tilt-wrapper {
+            width: 100%; height: 100%; position: relative; transform: rotate(23.5deg); z-index: 2; /* 確保在地軸和紋理在陰影之下 */
+        }
+        #earth-body {
+            width: 100%; height: 100%; border-radius: 50%; background: #1E90FF; overflow: hidden; position: relative;
+        }
+        #earth-texture {
+            position: absolute; width: 220%; height: 100%; left: 0;
+            background-image: radial-gradient(circle at 25% 30%, #228B22 6%, transparent 8%), radial-gradient(circle at 65% 60%, #228B22 9%, transparent 11%);
+            background-size: 50% 100%; animation: texture-slide 5s linear infinite; animation-play-state: paused;
+        }
+        #earth-axis {
+            position: absolute; top: -20%; left: 50%; width: 2px; height: 140%; background-color: red; transform: translateX(-50%); z-index: 6;
+        }
+
+        /* 【關鍵修正】陰影旋轉器 (再次順時針旋轉!) */
+        /* 這個容器抵消了 earth-pos 的逆轉，使內部陰影相對於太陽保持靜止 */
+        #shadow-rotator {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            animation: spin 365s linear infinite; animation-play-state: paused;
+            z-index: 5; /* 蓋在地球紋理上，但在地軸下 */
+            pointer-events: none;
+        }
+        /* 實際的陰影圖層 (靜態漸層) */
+        #shadow-overlay {
+            position: absolute; top: -5px; left: -5px; width: 70px; height: 70px; border-radius: 50%; 
+            /* 漸層設定：左側透明(亮)，右側深色(暗) */
+            background: radial-gradient(circle at 150% 50%, rgba(0,0,0,0.95) 55%, rgba(0,0,0,0.5) 65%, transparent 80%);
+        }
+
+
+        /* 月球系統 */
+        #moon-orbit {
+            position: absolute; top: 50%; left: 50%; width: 140px; height: 140px; margin: -70px 0 0 -70px; border-radius: 50%;
+            animation: spin 30s linear infinite; animation-play-state: paused; z-index: 8;
+        }
+        #moon-body {
+            position: absolute; top: 50%; right: 0; width: 18px; height: 18px; margin-top: -9px; border-radius: 50%;
+            background: radial-gradient(circle at 30% 50%, #FFFFFF 10%, #AAAAAA 60%, #222222 100%);
+        }
+        #moon-marker {
+            position: absolute; top: 50%; left: 2px; width: 4px; height: 4px; background-color: red; border-radius: 50%; 
+            transform: translateY(-50%); box-shadow: 0 0 2px red;
+        }
+
+        /* 動畫定義 */
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes spin-reverse { 100% { transform: rotate(-360deg); } }
+        @keyframes texture-slide { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+    </style>
+</head>
+<body>
+
+    <h1>星際教室：日夜光影修正版</h1>
+
+    <div id="ui-container">
+        <div class="btn-group">
+            <button id="btn-rotation">1. 地球自轉</button>
+            <button id="btn-revolution">2. 地球公轉 (四季+光影)</button>
+            <button id="btn-moon">3. 月亮繞地球</button>
+            <button id="btn-all">全部運行</button>
+            <button id="btn-stop">暫停</button>
+        </div>
+        <div id="info-box">
+            請點擊「2. 地球公轉」或「全部運行」，並調快速度。注意觀察地球的亮面是否永遠對著太陽？
+        </div>
+        <div class="speed-control-area">
+            <label for="speed-slider" style="margin-right: 10px;">速度控制：</label>
+            <input type="range" id="speed-slider" min="1" max="20" value="1" style="width: 200px;">
+        </div>
+    </div>
+
+    <div id="stage">
+        <div id="sun"></div>
+        <div class="season-tag" id="tag-summer">夏至<br>(傾向太陽)</div>
+        <div class="season-tag" id="tag-winter">冬至<br>(遠離太陽)</div>
+        <div class="season-tag" id="tag-spring">春分</div>
+        <div class="season-tag" id="tag-fall">秋分</div>
+
+        <div id="orbit-container">
+            <div id="earth-pos">
+                <div id="moon-orbit">
+                    <div id="moon-body">
+                        <div id="moon-marker"></div>
+                    </div>
+                </div>
+
+                <div id="earth-tilt-wrapper">
+                    <div id="earth-axis"></div>
+                    <div id="earth-body"><div id="earth-texture"></div></div>
+                </div>
+                
+                <div id="shadow-rotator">
+                    <div id="shadow-overlay"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const orbit = document.getElementById('orbit-container');
+        const earthPos = document.getElementById('earth-pos');
+        const texture = document.getElementById('earth-texture');
+        const moon = document.getElementById('moon-orbit');
+        // 取得新的陰影旋轉器
+        const shadowRot = document.getElementById('shadow-rotator');
+        const info = document.getElementById('info-box');
+        const btns = document.querySelectorAll('.btn-group button');
+
+        function setState(rot, rev, mon, msg, btnId) {
+            texture.style.animationPlayState = rot ? 'running' : 'paused';
+            orbit.style.animationPlayState = rev ? 'running' : 'paused';
+            earthPos.style.animationPlayState = rev ? 'running' : 'paused';
+            // 陰影旋轉器必須跟著公轉一起啟動/暫停
+            shadowRot.style.animationPlayState = rev ? 'running' : 'paused';
+            moon.style.animationPlayState = mon ? 'running' : 'paused';
+            info.innerHTML = msg;
+            btns.forEach(b => b.classList.remove('active'));
+            if(btnId) document.getElementById(btnId).classList.add('active');
+        }
+
+        document.getElementById('btn-rotation').onclick = () => setState(true, false, false, '地球自轉中。', 'btn-rotation');
+        
+        // 更新訊息提醒觀察光影
+        document.getElementById('btn-revolution').onclick = () => setState(false, true, false, '<strong>地球公轉中：</strong>請調快速度。仔細看地球的陰影，它現在會正確地背對太陽了！', 'btn-revolution');
+        
+        document.getElementById('btn-moon').onclick = () => setState(false, false, true, '月亮繞地球中 (潮汐鎖定展示)。', 'btn-moon');
+        document.getElementById('btn-all').onclick = () => setState(true, true, true, '全部運行中！', 'btn-all');
+        document.getElementById('btn-stop').onclick = () => setState(false, false, false, '已暫停。', 'btn-stop');
+
+        // 速度控制更新
+        document.getElementById('speed-slider').oninput = (e) => {
+            const speed = e.target.value;
+            const orbitalPeriod = (365/speed) + 's';
+            orbit.style.animationDuration = orbitalPeriod;
+            earthPos.style.animationDuration = orbitalPeriod;
+            // 陰影旋轉器的速度必須與公轉速度一致
+            shadowRot.style.animationDuration = orbitalPeriod;
+            
+            texture.style.animationDuration = (5/speed) + 's';
+            moon.style.animationDuration = (30/speed) + 's';
+        };
+    </script>
+</body>
+</html>
